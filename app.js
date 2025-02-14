@@ -32,8 +32,7 @@ io.on("connection", (uniqueSocket) => {
   //     console.log("disconnected");
   //   }) // disconnects from server when user leaves the page
 
-
-  // creates players 
+  // creates players
   if (!players.white) {
     players.white = uniqueSocket.id;
     uniqueSocket.emit("playerRole", "w");
@@ -58,26 +57,25 @@ io.on("connection", (uniqueSocket) => {
   uniqueSocket.on("move", (move) => {
     try {
       // white ke time pe white chalega black ke time pe black
-      if(chess.turn() === "w" && uniqueSocket.id === players.white) return;
-      if(chess.turn() === "b" && uniqueSocket.id === players.black) return;
+      if (chess.turn() === "w" && uniqueSocket.id === players.white) return;
+      if (chess.turn() === "b" && uniqueSocket.id === players.black) return;
 
       // check if the move is valid / agar valid move hai to game state ko change karna hai!
       const result = chess.move(move);
 
-      if(result) {
+      if (result) {
         currentPlayer = chess.turn();
         io.emit("move", move); // "move" event ko frontend ke liye emit kiya hai!
-        io.emit("boardState", chess.fen()) // board ki nayi state frontend pe bhejega fen matlab chess pieces ki postions like konsa piece kaha hai
+        io.emit("boardState", chess.fen()); // board ki nayi state frontend pe bhejega fen matlab chess pieces ki postions like konsa piece kaha hai
       } else {
         console.log("Invalid Move:", move);
         uniqueSocket.emit("invalidMove", move);
-
       }
-    } catch(err) {
+    } catch (err) {
       console.log(err);
-      uniqueSocket.emit("Invalid move: ", move)
+      uniqueSocket.emit("Invalid move: ", move);
     }
-  })
+  });
 });
 
 server.listen(3000, () => {
