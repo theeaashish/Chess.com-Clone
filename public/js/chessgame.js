@@ -1,105 +1,148 @@
 // const { Chess } = require("chess.js");
 
-const socket = io(); // this connects the frontend with the server
-
-// socket.emit("chessboard");
-// socket.on("chess connection", () => {
-//     console.log("chess connection established");
-// })
+const socket = io(); // Connects frontend with server
 
 const chess = new Chess();
 const boardElement = document.querySelector(".chessboard");
+
 if (!boardElement) {
   console.error("Chessboard element not found!");
 } else {
   console.log("Chessboard found. Rendering...");
 }
 
-
 let draggedPiece = null;
 let sourceSquare = null;
 let playerRole = null;
 
+// Render the chessboard
 const renderBoard = () => {
-  const board = chess.board();
-  boardElement.innerHTML = ""; // board should be empty
+  boardElement.innerHTML = ""; // Clear board
 
-  board.forEach((row, rowIndex) => {
-    row.forEach((column, columnIndex) => {
-      // Create a square element for each piece
-      const square = document.createElement("div");
-      square.classList.add(
-        "square",
-        (rowIndex + columnIndex) % 2 === 0 ? "light" : "dark"
-      ); // it creates chess board pattern like dark and light pattern on the chess board!
+  chess.board().forEach((row, rowIndex) => {
+    row.forEach((cell, colIndex) => {
+      const square = createSquare(rowIndex, colIndex);
 
-      square.dataset.row = rowIndex;
-      square.dataset.col = columnIndex;
-
-      if (column) {
-        const pieceElement = document.createElement("div");
-        pieceElement.classList.add(
-          "piece",
-          column.color === "w" ? "white" : "black"
-        );
-
-        const pieceImg = document.createElement("img");
-        pieceImg.src = getPieceUnicode(column);
-        pieceImg.classList.add("piece");
-        pieceElement.appendChild(pieceImg);
-
-        // pieceElement.innerHTML = getPieceUnicode(column);
-        pieceElement.draggable = playerRole === column.color; // only the player's pieces are draggable
-
-        pieceElement.addEventListener("dragstart", (e) => {
-          if (pieceElement.draggable) {
-            draggedPiece = pieceElement;
-            sourceSquare = { row: rowIndex, col: columnIndex };
-            e.dataTransfer.setData("text/plain", ""); // Required for drag and drop to work
-          }
-        });
-
-        pieceElement.addEventListener("dragend", (e) => {
-          draggedPiece = null;
-          sourceSquare = null; // reset the dragged piece and source square when the drag ends
-        });
-
-        square.appendChild(pieceElement); // append the piece to the square
+      if (cell) {
+        const pieceElement = createPieceElement(cell, rowIndex, colIndex);
+        square.appendChild(pieceElement);
       }
 
-      square.addEventListener("dragover", (e) => {
-        e.preventDefault(); // prevent the default drag and drop behavior
-      });
-
-      square.addEventListener("drop", (e) => {
-        e.preventDefault();
-        if (draggedPiece) {
-          const targetSource = {
-            row: parseInt(square.dataset.row),
-            col: parseInt(square.dataset.col),
-          };
-          handleMove(sourceSquare, targetSource);
-        }
-      });
-      boardElement.appendChild(square); // append the square to the board
+      boardElement.appendChild(square);
     });
   });
 };
 
-const handleMove = () => {};
+// Create a chessboard square
+const createSquare = (rowIndex, colIndex) => {
+  const square = document.createElement("div");
+  square.classList.add(
+    "square",
+    (rowIndex + colIndex) % 2 === 0 ? "light" : "dark"
+  );
 
+  square.dataset.row = rowIndex;
+  square.dataset.col = colIndex;
 
-const getPieceUnicode = (piece) => {
-    if (!piece) return "";
+  // Allow dropping of pieces
+  square.addEventListener("dragover", (e) => e.preventDefault());
+  square.addEventListener("drop", (e) => handleDrop(e, square));
 
-    const colorPrefix = piece.color === "w" ? "w" : "b"; // Determine color prefix
-
-    const unicodePieces = {
-        p: "P.svg", n: "N.svg", b: "B.svg", r: "R.svg", q: "Q.svg", k: "K.svg"
-    };
-
-    return `/images/${colorPrefix}${unicodePieces[piece.type] || ""}`; 
+  return square;
 };
 
+// Create a chess piece element
+const createPieceElement = (piece, rowIndex, colIndex) => {
+  const pieceElement = document.createElement("div");
+  pieceElement.classList.add("piece", piece.color === "w" ? "white" : "black");
 
+  const pieceImg = document.createElement("img");
+  pieceImg.src = getPieceImage(piece);
+  pieceImg.classList.add("piece");
+  pieceElement.appendChild(pieceImg);
+
+  pieceElement.draggable = playerRole === piece.color; // Only allow player's own pieces to be draggable
+
+  pieceElement.addEventListener("dragstart", (e) => handleDragStart(e, rowIndex, colIndex));
+  pieceElement.addEventListener("dragend", handleDragEnd);
+
+  return pieceElement;
+};
+
+// Handle drag start
+const handleDragStart = (e, row, col) => {
+  if (e.target.draggable) {
+    draggedPiece = e.target;
+    sourceSquare = { row, col };
+    e.dataTransfer.setData("text/plain", ""); // Required for drag & drop to work
+  }
+};
+
+// Handle drag end
+const handleDragEnd = () => {
+  draggedPiece = null;
+  sourceSquare = null;
+};
+
+// Handle piece drop
+const handleDrop = (e, targetSquare) => {
+  e.preventDefault();
+  
+  if (draggedPiece) {
+    const target = {
+      row: parseInt(targetSquare.dataset.row),
+      col: parseInt(targetSquare.dataset.col),
+    };
+    handleMove(sourceSquare, target);
+  }
+};
+
+// Process move
+const handleMove = (source, target) => {
+  const move = {
+    from: `${String.fromCharCode(97 + source.col)}${8 - source.row}`,
+    to: `${String.fromCharCode(97 + target.col)}${8 - target.row}`,
+    promotion: "q",
+  };
+
+  const validMove = chess.move(move); // Check if the move is valid
+
+  if (validMove) {
+    socket.emit("move", move);
+    renderBoard(); // Update UI
+  }
+};
+
+// Get image path for pieces
+const getPieceImage = (piece) => {
+  if (!piece) return "";
+
+  const colorPrefix = piece.color === "w" ? "w" : "b";
+  const pieceTypes = { p: "P", n: "N", b: "B", r: "R", q: "Q", k: "K" };
+
+  return `/images/${colorPrefix}${pieceTypes[piece.type]}.svg`;
+};
+
+// Socket listeners
+socket.on("playerRole", (role) => {
+  playerRole = role;
+  renderBoard();
+});
+
+socket.on("spectatorRole", () => {
+  playerRole = null;
+  renderBoard();
+});
+
+socket.on("boardState", (fen) => {
+  chess.load(fen);
+  renderBoard();
+});
+
+socket.on("move", (move) => {
+  chess.move(move);
+  renderBoard();
+});
+
+// Initial board render
 renderBoard();
